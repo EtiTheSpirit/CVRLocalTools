@@ -1,2 +1,4 @@
 # CVRLocalTools
-haha #IsLocal go brrrrrrrrr
+This mod is a temporary solution to the lack of a predefined `#IsLocal` animator parameter.
+
+This allows declaring an animator parameter of any type (Bool, Int, Float, Trigger) named `#IsLocal`. If present, the mod will set the value to `true` or `1` (depending on type). If it is a trigger, it will activate the trigger. Please keep in mind that this doesn't run *any* code if you are a remote client to someone who is running the mod. As a result, the value will remain equal to its default for remote clients, and will only be set to `true`/`1` iff it is the local player using the animator.

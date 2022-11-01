@@ -12,8 +12,11 @@ namespace CVRLocalTools {
 
 		private static MelonLogger.Instance _LOG;
 
-		public override void OnInitializeMelon() {
+		public override void OnApplicationStart() {
 			Prefs.InitializePrefs();
+		}
+
+		public override void OnInitializeMelon() {
 			_LOG = LoggerInstance;
 			MethodInfo org = typeof(PlayerSetup).GetMethod(nameof(PlayerSetup.CalibrateAvatar), BindingFlags.Public | BindingFlags.Instance);
 			MethodInfo postMtd = typeof(LocalUtilsMain).GetMethod(nameof(AfterCalibrateAvatar), BindingFlags.Public | BindingFlags.Static);
