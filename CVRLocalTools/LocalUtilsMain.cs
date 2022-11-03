@@ -1,52 +1,80 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
+using ABI_RC.Core;
+using ABI_RC.Core.EventSystem;
 using ABI_RC.Core.InteractionSystem;
 using ABI_RC.Core.Player;
+using ABI_RC.Systems.MovementSystem;
+using CVRLocalTools.Animators;
 using HarmonyLib;
 using MelonLoader;
+using MelonLoader.ICSharpCode.SharpZipLib.Zip;
 using UnityEngine;
+using static MelonLoader.MelonLogger;
 
 namespace CVRLocalTools {
 	public class LocalUtilsMain : MelonMod {
 
-		private static MelonLogger.Instance _LOG;
+		internal static MelonLogger.Instance _log;
+		private static AnimatorControllerParameter _velocityX;
+		private static AnimatorControllerParameter _velocityY;
+		private static AnimatorControllerParameter _velocityZ;
+		private static AnimatorControllerParameter _positionX;
+		private static AnimatorControllerParameter _positionY;
+		private static AnimatorControllerParameter _positionZ;
+		private static AnimatorControllerParameter _rotationX;
+		private static AnimatorControllerParameter _rotationY;
+		private static AnimatorControllerParameter _rotationZ;
+		private static Animator _animator;
+		private static List<Animator> _remoteAnimators = new List<Animator>();
+		private static Transform _animatorTrs;
+		private static MovementSystem _movementSystem;
+		private static bool _isReady = false;
 
 		public override void OnApplicationStart() {
-			Prefs.InitializePrefs();
+			PrefsAndTools.InitializePrefs();
 		}
 
 		public override void OnInitializeMelon() {
-			_LOG = LoggerInstance;
-			MethodInfo org = typeof(PlayerSetup).GetMethod(nameof(PlayerSetup.CalibrateAvatar), BindingFlags.Public | BindingFlags.Instance);
-			MethodInfo postMtd = typeof(LocalUtilsMain).GetMethod(nameof(AfterCalibrateAvatar), BindingFlags.Public | BindingFlags.Static);
+			_log = LoggerInstance;
 
-			if (org == null) throw new ArgumentNullException($"Failed to find {nameof(PlayerSetup.CalibrateAvatar)} method. {nameof(CVRLocalTools)} Mod will fail to function.");
-			if (postMtd == null) throw new ArgumentNullException($"Failed to find {nameof(AfterCalibrateAvatar)} method. {nameof(CVRLocalTools)} Mod will fail to function.");
+			MethodInfo orgCalibrate = typeof(PlayerSetup).GetMethod(nameof(PlayerSetup.CalibrateAvatar), BindingFlags.Public | BindingFlags.Instance);
+			MethodInfo orgCleanAvy = typeof(CVRTools).GetMethod(nameof(CVRTools.CleanAvatarGameObjectNetwork), BindingFlags.Public | BindingFlags.Static);
+
+			MethodInfo postCalibrateMtd = typeof(LocalUtilsMain).GetMethod(nameof(AfterCalibrateAvatar), BindingFlags.NonPublic | BindingFlags.Static);
+			MethodInfo postCleanAvy = typeof(LocalUtilsMain).GetMethod(nameof(PostCleanRemoteAvatar), BindingFlags.NonPublic | BindingFlags.Static);
+
+			if (orgCalibrate == null) throw new ArgumentNullException($"Failed to find {nameof(PlayerSetup.CalibrateAvatar)} method. {nameof(CVRLocalTools)} Mod will fail to function.");
+			if (postCalibrateMtd == null) throw new ArgumentNullException($"Failed to find {nameof(AfterCalibrateAvatar)} method. {nameof(CVRLocalTools)} Mod will fail to function.");
+			if (orgCleanAvy == null) throw new ArgumentNullException($"Failed to find {nameof(CVRTools.CleanAvatarGameObjectNetwork)} method. {nameof(CVRLocalTools)} Mod will fail to function.");
+			if (postCleanAvy == null) throw new ArgumentNullException($"Failed to find {nameof(PostCleanRemoteAvatar)} method. {nameof(CVRLocalTools)} Mod will fail to function.");
 
 			HarmonyInstance.Patch(
-				original: org,
-				postfix: new HarmonyMethod(postMtd)
+				original: orgCalibrate,
+				postfix: new HarmonyMethod(postCalibrateMtd)
+			);
+			HarmonyInstance.Patch(
+				original: orgCleanAvy,
+				postfix: new HarmonyMethod(postCleanAvy)
 			);
 		}
 
-		public static void AfterCalibrateAvatar(PlayerSetup __instance) {
-			if (Prefs.WarnForFaults) {
-				AnimatorControllerParameter local = __instance._animator.parameters.FirstOrDefault(param => param.name == "#IsLocal");
-				if (local == null) {
-					local = __instance._animator.parameters.FirstOrDefault(param => param.name == "IsLocal");
-					if (local != null) {
-						if (ViewManager.Instance != null) {
-							ViewManager.Instance.TriggerPushNotification("This avatar might not be made correctly (it has a replicated IsLocal parameter). Check the ML console for more information. You can turn this warning off in your ML preferences.", 8f);
-						}
-						_LOG.Warning("\u001b[93mThe avatar you just loaded defines a parameter named \u001b[96mIsLocal\u001b[93m (when it should instead be \u001b[4m\u001b[92m#\u001b[96m\u001b[24mIsLocal\u001b[93m). Without the leading #, the value would be sent across the network, which you don't want. This parameter will \u001b[4mnot\u001b[24m be changed by this mod. You can turn off this warning in your mod settings.");
-					}
-				}
+		internal static void PostCleanRemoteAvatar(GameObject avatar, bool isFriend, AssetManagement.AvatarTags tags, bool forceShow, bool forceBlock) {
+			AnimatorParameterMarshaller existing = avatar.transform.parent.parent.GetComponent<AnimatorParameterMarshaller>();
+			if (existing != null) {
+				GameObject.Destroy(existing);
 			}
 
-			// This actually works for all four types!
-			// For boolean, it sets to true. For int and float it sets to 1. For trigger, it sets the trigger.
-			__instance.changeAnimatorParam("#IsLocal", 1);
+			AnimatorParameterMarshaller marshaller = avatar.transform.parent.parent.gameObject.AddComponent<AnimatorParameterMarshaller>();
+			marshaller.Initialize(avatar.GetComponent<Animator>(), false);
+		}
+
+		internal static void AfterCalibrateAvatar(PlayerSetup __instance) {
+			AnimatorParameterMarshaller marshaller = __instance.gameObject.AddComponent<AnimatorParameterMarshaller>();
+			marshaller.Initialize(__instance._animator, true);
 		}
 
 	}

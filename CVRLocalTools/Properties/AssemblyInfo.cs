@@ -36,4 +36,4 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyVersion("1.0.0.0")]
 [assembly: AssemblyFileVersion("1.0.0.0")]
 [assembly: MelonGame("Alpha Blend Interactive", "ChilloutVR")]
-[assembly: MelonInfo(typeof(LocalUtilsMain), "CVRLocalUtils", "1.0.0", "Xan // Eti")]
+[assembly: MelonInfo(typeof(LocalUtilsMain), "CVRLocalUtils", "1.1.0", "Xan // Eti")]
