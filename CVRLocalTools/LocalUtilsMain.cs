@@ -69,11 +69,15 @@ namespace CVRLocalTools {
 			}
 
 			AnimatorParameterMarshaller marshaller = avatar.transform.parent.parent.gameObject.AddComponent<AnimatorParameterMarshaller>();
-			marshaller.Initialize(avatar.GetComponent<Animator>(), false);
+			Animator animator = avatar.GetComponent<Animator>();
+			if (animator == null) throw new MissingComponentException("Failed to find an Animator on another player's avatar.");
+			marshaller.Initialize(animator, false);
 		}
 
 		internal static void AfterCalibrateAvatar(PlayerSetup __instance) {
 			AnimatorParameterMarshaller marshaller = __instance.gameObject.AddComponent<AnimatorParameterMarshaller>();
+			Animator animator = __instance._animator;
+			if (animator == null) throw new MissingComponentException("Failed to find an Animator on another player's avatar.");
 			marshaller.Initialize(__instance._animator, true);
 		}
 
