@@ -18,7 +18,7 @@ namespace CVRLocalTools {
 		private static MelonPreferences_Category _settingsCategory { get; set; }
 
 		/// <summary>
-		/// If true, <see cref="GetLocalParameterByName(Animator, string, out AnimatorControllerParameter)"/> will raise a warning as intended. If false, it will do nothing.
+		/// If true, <see cref="AssertParameterIsLocal(Animator, string)"/> will raise a warning as intended. If false, it will do nothing.
 		/// </summary>
 		internal static bool WarnForFaults => _settingsCategory.GetEntry<bool>("WarnForNetworkedLocal").Value;
 
