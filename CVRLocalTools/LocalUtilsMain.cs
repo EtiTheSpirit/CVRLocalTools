@@ -75,6 +75,11 @@ namespace CVRLocalTools {
 		}
 
 		internal static void AfterCalibrateAvatar(PlayerSetup __instance) {
+			AnimatorParameterMarshaller existing = __instance.gameObject.GetComponent<AnimatorParameterMarshaller>();
+			if (existing != null) {
+				GameObject.Destroy(existing);
+			}
+
 			AnimatorParameterMarshaller marshaller = __instance.gameObject.AddComponent<AnimatorParameterMarshaller>();
 			Animator animator = __instance._animator;
 			if (animator == null) throw new MissingComponentException("Failed to find an Animator on another player's avatar.");
