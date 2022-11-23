@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices.WindowsRuntime;
 using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -62,14 +63,19 @@ namespace CVRLocalTools.Animators {
 
 		private Vector3 _lastPosition;
 		private Vector3 _lastRotation;
-		private List<string> _names;
+		private List<string> _names = new List<string>();
 
 		private MutableAnimatorParameter GetParameter(Animator animator, string name) {
-			_names.Add(name);
-			return new MutableAnimatorParameter(animator, "#" + name);
+			bool isPresent = MutableAnimatorParameter.TryGetIDFromName(animator, "#" + name, out int id);
+			if (isPresent) {
+				_names.Add(name);
+				return new MutableAnimatorParameter(animator, "#" + name, id);
+			}
+			return null;
 		}
 
 		private void LateInitWithAnimator(Animator animator) {
+			if (animator == null) throw new ArgumentNullException(nameof(animator));
 			_isLocal = GetParameter(animator, "IsLocal");
 
 			_velocityX = GetParameter(animator, "VelocityX");
@@ -110,10 +116,10 @@ namespace CVRLocalTools.Animators {
 
 			// Now the warning:
 			string[] names = _names.ToArray();
-			PrefsAndTools.AssertParametersAreLocal(animator, names);
+			bool ok = PrefsAndTools.AssertParametersAreLocal(animator, names);
 
 #pragma warning disable IDE0031
-			if (ViewManager.Instance != null) {
+			if (ViewManager.Instance != null && !ok) {
 				ViewManager.Instance.TriggerPushNotification("CVRLocalTools found what might be a mistake with this avatar's parameters (check the console for more info). You can turn this warning off in your ML preferences.", 8f);
 			}
 #pragma warning restore IDE0031
