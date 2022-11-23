@@ -26,8 +26,8 @@ When a parameter is said to apply to remote animators, that means your client co
 | #LookY             | float | The Y component of the current viewport camera's forward vector.                                       | ❌                           |
 | #LookZ             | float | The Z component of the current viewport camera's forward vector.                                       | ❌                           |
 | #RotVelocityX      | float | The X component (pitch) of the avatar's rotational velocity in world space.                            | ✅                           |
-| #RotVelocityY      | float | The Y component (pitch) of the avatar's rotational velocity in world space.                            | ✅                           |
-| #RotVelocityZ      | float | The Z component (pitch) of the avatar's rotational velocity in world space.                            | ✅                           |
+| #RotVelocityY      | float | The Y component (yaw) of the avatar's rotational velocity in world space.                            | ✅                           |
+| #RotVelocityZ      | float | The Z component (roll) of the avatar's rotational velocity in world space.                            | ✅                           |
 | #PositionX         | float | The X component of the avatar's position in world space.                                               | ✅                           |
 | #PositionY         | float | The Y component of the avatar's position in world space.                                               | ✅                           |
 | #PositionZ         | float | The Z component of the avatar's position in world space.                                               | ✅                           |
