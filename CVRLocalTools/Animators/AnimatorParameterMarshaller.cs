@@ -16,15 +16,22 @@ namespace CVRLocalTools.Animators {
 
 	public class AnimatorParameterMarshaller : MonoBehaviour {
 
-		// private Rigidbody _rigidBody;
 		private PlayerSetup _setupLocal;
-		private MutableAnimatorParameter _isLocal;
 		private bool _desiredLocality = false;
+		private Camera _mainCamera = null;
+		private float _lastCheckedCameraSince = float.PositiveInfinity;
 
+		// This stuff would be way better with #nullable
+		// All MutableAnimatorParameters are nullable.
+		private MutableAnimatorParameter _isLocal;
 
 		private MutableAnimatorParameter _velocityX;
 		private MutableAnimatorParameter _velocityY;
 		private MutableAnimatorParameter _velocityZ;
+
+		private MutableAnimatorParameter _localVelocityX;
+		private MutableAnimatorParameter _localVelocityY;
+		private MutableAnimatorParameter _localVelocityZ;
 
 		private MutableAnimatorParameter _rotVelocityX;
 		private MutableAnimatorParameter _rotVelocityY;
@@ -37,21 +44,41 @@ namespace CVRLocalTools.Animators {
 		private MutableAnimatorParameter _rotationX;
 		private MutableAnimatorParameter _rotationY;
 		private MutableAnimatorParameter _rotationZ;
-		private bool _displayWarning = false;
+
+		private MutableAnimatorParameter _localRotationX;
+		private MutableAnimatorParameter _localRotationZ;
+
+		private MutableAnimatorParameter _upright;
+
+		private MutableAnimatorParameter _lookX;
+		private MutableAnimatorParameter _lookY;
+		private MutableAnimatorParameter _lookZ;
+
+		/*
+		private MutableAnimatorParameter _localLookX;
+		private MutableAnimatorParameter _localLookY;
+		private MutableAnimatorParameter _localLookZ;
+		*/
 
 		private Vector3 _lastPosition;
 		private Vector3 _lastRotation;
+		private List<string> _names;
 
 		private MutableAnimatorParameter GetParameter(Animator animator, string name) {
-			_displayWarning = _displayWarning || !PrefsAndTools.AssertParameterIsLocal(animator, name);
+			_names.Add(name);
 			return new MutableAnimatorParameter(animator, "#" + name);
 		}
+
 		private void LateInitWithAnimator(Animator animator) {
 			_isLocal = GetParameter(animator, "IsLocal");
 
 			_velocityX = GetParameter(animator, "VelocityX");
 			_velocityY = GetParameter(animator, "VelocityY");
 			_velocityZ = GetParameter(animator, "VelocityZ");
+
+			_localVelocityX = GetParameter(animator, "RelativeVelocityX");
+			_localVelocityY = GetParameter(animator, "RelativeVelocityY");
+			_localVelocityZ = GetParameter(animator, "RelativeVelocityZ");
 
 			_rotVelocityX = GetParameter(animator, "RotVelocityX");
 			_rotVelocityY = GetParameter(animator, "RotVelocityY");
@@ -65,9 +92,31 @@ namespace CVRLocalTools.Animators {
 			_rotationY = GetParameter(animator, "RotationY");
 			_rotationZ = GetParameter(animator, "RotationZ");
 
-			if (_displayWarning && ViewManager.Instance != null) {
-				ViewManager.Instance.TriggerPushNotification("CVRLocalTools detected what might be a mistake with this avatar's parameters. Check the ML console for more information. You can turn this warning off in your ML preferences.", 8f);
+			_localRotationX = GetParameter(animator, "RelativePitch");
+			_localRotationZ = GetParameter(animator, "RelativeRoll");
+
+			_upright = GetParameter(animator, "Upright");
+
+			_lookX = GetParameter(animator, "LookX");
+			_lookY = GetParameter(animator, "LookY");
+			_lookZ = GetParameter(animator, "LookZ");
+
+			/*
+			// TODO: This would benefit most from a hip tracker.
+			_localLookX = GetParameter(animator, "RelativeLookX");
+			_localLookY = GetParameter(animator, "RelativeLookY");
+			_localLookZ = GetParameter(animator, "RelativeLookZ");
+			*/
+
+			// Now the warning:
+			string[] names = _names.ToArray();
+			PrefsAndTools.AssertParametersAreLocal(animator, names);
+
+#pragma warning disable IDE0031
+			if (ViewManager.Instance != null) {
+				ViewManager.Instance.TriggerPushNotification("CVRLocalTools found what might be a mistake with this avatar's parameters (check the console for more info). You can turn this warning off in your ML preferences.", 8f);
 			}
+#pragma warning restore IDE0031
 
 			SetIfPresent(_isLocal, _desiredLocality);
 			LocalUtilsMain._log.Msg("Parameter updater ready for this avatar.");
@@ -76,23 +125,61 @@ namespace CVRLocalTools.Animators {
 			_lastRotation = gameObject.transform.eulerAngles;
 		}
 
+		/// <summary>
+		/// Initialize the marshaller using the given animator and desired locality.
+		/// </summary>
+		/// <param name="animator">The animator to wrap around.</param>
+		/// <param name="isLocal">Whether or not the avatar that the given animator is a part of represents the local player's avatar.</param>
+		/// <exception cref="ArgumentNullException">If the input animator is null.</exception>
 		public void Initialize(Animator animator, bool isLocal) {
-			if (animator == null) throw new MissingComponentException("Failed to find an animator.");
+			if (animator == null) throw new ArgumentNullException(nameof(animator));
 			_desiredLocality = isLocal;
 			LateInitWithAnimator(animator);
 		}
 
 		void FixedUpdate() {
-			Vector3 position = gameObject.transform.position;
-			Vector3 rotation = gameObject.transform.eulerAngles;
-			Vector3 velocity = (position - _lastPosition) / Time.fixedDeltaTime;
-			Vector3 rotationalVelocity = (rotation - _lastRotation) / Time.fixedDeltaTime;
-			WrapVector3(ref rotationalVelocity);
+			Transform myTransform = gameObject.transform;
+			float fdt = Time.fixedDeltaTime;
 
+			Vector3 position = myTransform.position;
+			Vector3 rotation = myTransform.eulerAngles;
+			Vector3 velocity = (position - _lastPosition) / fdt;
+			Vector3 rotationalVelocity = (rotation - _lastRotation) / fdt;
+			WrapVector3(ref rotationalVelocity); // TODO: This creates a large, backwards delta when wrapping angles i.e. 359 => 1
+			// TODO: Why does the rigidbody not have its values set?
+
+			// World values:
 			SetVector3(_positionX, _positionY, _positionZ, ref position);
 			SetVector3(_rotationX, _rotationY, _rotationZ, ref rotation);
 			SetVector3(_velocityX, _velocityY, _velocityZ, ref velocity);
 			SetVector3(_rotVelocityX, _rotVelocityY, _rotVelocityZ, ref rotationalVelocity);
+			SetIfPresent(_upright, myTransform.up.Dot(Vector3.up));
+
+			// Relative values:
+			Vector3 localVelocity = myTransform.TransformVector(velocity);
+			SetVector3(_localVelocityX, _localVelocityY, _localVelocityZ, ref localVelocity);
+			SetIfPresent(_localRotationX, Pitch(myTransform));
+			SetIfPresent(_localRotationZ, Roll(myTransform));
+			
+
+			// Client-only values: 
+			if (_desiredLocality) {
+				// Camera getter:
+				_lastCheckedCameraSince += fdt;
+				if (_lastCheckedCameraSince > 1) {
+					_mainCamera = Camera.main;
+					// According to Unity, referencing this repeatedly (i.e. every frame) is not a good idea, so I have this delay cycle to ensure the reference
+					// is correct mostly all the time while caching what I can.
+					_lastCheckedCameraSince = 0;
+				}
+				
+				if (_mainCamera != null) {
+					Transform trs = _mainCamera.gameObject.transform;
+					Vector3 forward = trs.forward;
+					SetVector3(_lookX, _lookY, _lookZ, ref forward);
+				}
+			}
+
 			_lastPosition = position;
 			_lastRotation = rotation;
 		}
@@ -100,13 +187,6 @@ namespace CVRLocalTools.Animators {
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private void SetIfPresent(MutableAnimatorParameter param, float value) {
 			if (param?.IsValid ?? false) {
-				/*
-				if (_setupLocal) {
-					_setupLocal.changeAnimatorParam(param.Name, value);
-				} else {
-					param.Set(value);
-				}
-				*/
 				param.Set(value);
 			}
 		}
@@ -114,13 +194,6 @@ namespace CVRLocalTools.Animators {
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private void SetIfPresent(MutableAnimatorParameter param, bool value) {
 			if (param?.IsValid ?? false) {
-				/*
-				if (_setupLocal) {
-					_setupLocal.changeAnimatorParam(param.Name, value ? 1f : 0f);
-				} else {
-					param.Set(value);
-				}
-				*/
 				param.Set(value);
 			}
 		}
@@ -130,7 +203,7 @@ namespace CVRLocalTools.Animators {
 			SetIfPresent(y, vector.y);
 			SetIfPresent(z, vector.z);
 		}
-
+		
 		private void WrapVector3(ref Vector3 vec) {
 			if (vec.x > 360) vec.x -= 360;
 			if (vec.y > 360) vec.y -= 360;
@@ -138,6 +211,22 @@ namespace CVRLocalTools.Animators {
 			if (vec.x < -360) vec.x += 360;
 			if (vec.y < -360) vec.y += 360;
 			if (vec.z < -360) vec.z += 360;
+		}
+
+		// Pitch and Roll methods acquired via https://answers.unity.com/questions/1366142/get-pitch-and-roll-values-from-object.html
+
+		private float Pitch(Transform trs) {
+			Vector3 right = trs.right * Mathf.Sign(transform.up.y);
+			right.y = 0;
+			Vector3 fwd = Vector3.Cross(right, Vector3.up).normalized;
+			return Vector3.Angle(fwd, transform.forward) * Mathf.Sign(transform.forward.y);
+		}
+
+		private float Roll(Transform trs) {
+			Vector3 fwd = transform.forward * Mathf.Sign(transform.up.y);
+			fwd.y = 0;
+			Vector3 right = Vector3.Cross(Vector3.up, fwd).normalized;
+			return Vector3.Angle(right, transform.right) * Mathf.Sign(transform.right.y);
 		}
 	}
 }
