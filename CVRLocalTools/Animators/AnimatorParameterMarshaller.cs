@@ -17,7 +17,7 @@ namespace CVRLocalTools.Animators {
 
 	public class AnimatorParameterMarshaller : MonoBehaviour {
 
-		private PlayerSetup _setupLocal;
+		// private PlayerSetup _setupLocal;
 		private bool _desiredLocality = false;
 		private Camera _mainCamera = null;
 		private float _lastCheckedCameraSince = float.PositiveInfinity;
@@ -63,7 +63,7 @@ namespace CVRLocalTools.Animators {
 
 		private Vector3 _lastPosition;
 		private Vector3 _lastRotation;
-		private List<string> _names = new List<string>();
+		private readonly List<string> _names = new List<string>();
 
 		private MutableAnimatorParameter GetParameter(Animator animator, string name) {
 			bool isPresent = MutableAnimatorParameter.TryGetIDFromName(animator, "#" + name, out int id);
@@ -120,7 +120,7 @@ namespace CVRLocalTools.Animators {
 
 #pragma warning disable IDE0031
 			if (ViewManager.Instance != null && !ok) {
-				ViewManager.Instance.TriggerPushNotification("CVRLocalTools found what might be a mistake with this avatar's parameters (check the console for more info). You can turn this warning off in your ML preferences.", 8f);
+				ViewManager.Instance.TriggerPushNotification("CVRLocalTools found what might be a mistake with this avatar's parameters (check the log file). You can turn this warning off in your ML preferences.", 8f);
 			}
 #pragma warning restore IDE0031
 
@@ -146,24 +146,25 @@ namespace CVRLocalTools.Animators {
 		void FixedUpdate() {
 			Transform myTransform = gameObject.transform;
 			float fdt = Time.fixedDeltaTime;
+			float invFdt = 1f / fdt;
 
 			Vector3 position = myTransform.position;
 			Vector3 rotation = myTransform.eulerAngles;
-			Vector3 velocity = (position - _lastPosition) / fdt;
-			Vector3 rotationalVelocity = (rotation - _lastRotation) / fdt;
-			WrapVector3(ref rotationalVelocity); // TODO: This creates a large, backwards delta when wrapping angles i.e. 359 => 1
+			Vector3 velocity = (position - _lastPosition) * invFdt;
+			Vector3 rotationalVelocity = (rotation - _lastRotation) * invFdt;
+			WrapVector3Angles(ref rotationalVelocity); // TODO: This creates a large, backwards delta when wrapping angles i.e. 359 => 1
 			// TODO: Why does the rigidbody not have its values set?
 
 			// World values:
-			SetVector3(_positionX, _positionY, _positionZ, ref position);
-			SetVector3(_rotationX, _rotationY, _rotationZ, ref rotation);
-			SetVector3(_velocityX, _velocityY, _velocityZ, ref velocity);
-			SetVector3(_rotVelocityX, _rotVelocityY, _rotVelocityZ, ref rotationalVelocity);
+			SetVector3(_positionX, _positionY, _positionZ, position);
+			SetVector3(_rotationX, _rotationY, _rotationZ, rotation);
+			SetVector3(_velocityX, _velocityY, _velocityZ, velocity);
+			SetVector3(_rotVelocityX, _rotVelocityY, _rotVelocityZ, rotationalVelocity);
 			SetIfPresent(_upright, myTransform.up.Dot(Vector3.up));
 
 			// Relative values:
 			Vector3 localVelocity = myTransform.TransformVector(velocity);
-			SetVector3(_localVelocityX, _localVelocityY, _localVelocityZ, ref localVelocity);
+			SetVector3(_localVelocityX, _localVelocityY, _localVelocityZ, localVelocity);
 			SetIfPresent(_localRotationX, Pitch(myTransform));
 			SetIfPresent(_localRotationZ, Roll(myTransform));
 			
@@ -181,8 +182,7 @@ namespace CVRLocalTools.Animators {
 				
 				if (_mainCamera != null) {
 					Transform trs = _mainCamera.gameObject.transform;
-					Vector3 forward = trs.forward;
-					SetVector3(_lookX, _lookY, _lookZ, ref forward);
+					SetVector3(_lookX, _lookY, _lookZ, trs.forward);
 				}
 			}
 
@@ -204,13 +204,24 @@ namespace CVRLocalTools.Animators {
 			}
 		}
 
-		private void SetVector3(MutableAnimatorParameter x, MutableAnimatorParameter y, MutableAnimatorParameter z, ref Vector3 vector) {
+		/// <summary>
+		/// Sets one or more of an X, Y and Z parameter representing components of a <see cref="Vector3"/>
+		/// </summary>
+		/// <param name="x"></param>
+		/// <param name="y"></param>
+		/// <param name="z"></param>
+		/// <param name="vector"></param>
+		private void SetVector3(MutableAnimatorParameter x, MutableAnimatorParameter y, MutableAnimatorParameter z, in Vector3 vector) {
 			SetIfPresent(x, vector.x);
 			SetIfPresent(y, vector.y);
 			SetIfPresent(z, vector.z);
 		}
 		
-		private void WrapVector3(ref Vector3 vec) {
+		/// <summary>
+		/// Wraps a <see cref="Vector3"/> within a range of -360 to +360.
+		/// </summary>
+		/// <param name="vec"></param>
+		private void WrapVector3Angles(ref Vector3 vec) {
 			if (vec.x > 360) vec.x -= 360;
 			if (vec.y > 360) vec.y -= 360;
 			if (vec.z > 360) vec.z -= 360;

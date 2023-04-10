@@ -36,4 +36,4 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyVersion("1.2.0.0")]
 [assembly: AssemblyFileVersion("1.2.0.0")]
 [assembly: MelonGame("Alpha Blend Interactive", "ChilloutVR")]
-[assembly: MelonInfo(typeof(LocalUtilsMain), "Local Parameter Extender", "1.2.0", "Xan // Eti")]
+[assembly: MelonInfo(typeof(LocalUtilsMain), "Local Parameter Extender", "1.2.1", "Xan // Eti")]

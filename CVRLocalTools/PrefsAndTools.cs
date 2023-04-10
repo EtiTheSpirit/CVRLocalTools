@@ -16,21 +16,26 @@ namespace CVRLocalTools {
 		private const string GREEN = "\u001b[92m";
 		private const string UNDERLINE_ON = "\u001b[4m";
 		private const string UNDERLINE_OFF = "\u001b[24m";
-		
-		private static MelonPreferences_Category _settingsCategory { get; set; }
+
+		private static MelonPreferences_Category _settingsCategory;
 
 		/// <summary>
-		/// If true, <see cref="AssertParameterIsLocal(Animator, string)"/> will raise a warning as intended. If false, it will do nothing.
+		/// If true, <see cref="AssertParameterIsLocal(Animator, string)"/> will raise a warning if it finds a parameter reserved by CVRLocalTools (i.e. <c>IsLocal</c>) declared as a replicated parameter instead of a clientside parameter.
 		/// </summary>
-		internal static bool WarnForFaults => _warnForFaultsEntry.Value;
-		internal static bool WarnForLocalAndGlobal => _warnForLocalAndGlobalEntry.Value;
-		private static MelonPreferences_Entry<bool> _warnForFaultsEntry;
-		private static MelonPreferences_Entry<bool> _warnForLocalAndGlobalEntry;
+		internal static bool VerifyParameterNames => _verifyParameterNames.Value;
+
+		/// <summary>
+		/// If true, <see cref="AssertParameterIsLocal(Animator, string)"/> will raise a warning if it finds two parameters, one networked and one non-networked.
+		/// </summary>
+		internal static bool WarnForLocalAndGlobal => _warnForLocalAndGlobal.Value;
+
+		private static MelonPreferences_Entry<bool> _verifyParameterNames;
+		private static MelonPreferences_Entry<bool> _warnForLocalAndGlobal;
 
 		internal static void InitializePrefs() {
 			_settingsCategory = MelonPreferences.CreateCategory("Local Data Utilities");
-			_warnForFaultsEntry = _settingsCategory.CreateEntry("WarnForNetworkedLocal", false, "Verify Parameter Names", "If true, raise a warning in the console if the avatar declares any parameter managed by this mod without a leading #. If disabled, the mod will just do nothing without saying why it's doing nothing.");
-			_warnForLocalAndGlobalEntry = _settingsCategory.CreateEntry("WarnForLocalAndGlobal", false, "Verbose Verification", $"If true, and if {_warnForFaultsEntry.DisplayName} is true, the system will also raise a notice in the console when it finds both \"Param\" *and* \"#Param\" on an avatar (avatar authors doing this is anticipated to be intentional, but if accidental it can be confusing).");
+			_verifyParameterNames = _settingsCategory.CreateEntry("WarnForNetworkedLocal", false, "Verify Parameter Names", "If true, raise a warning in the console if the avatar declares any parameter managed by this mod without a leading #. If disabled, the mod will just do nothing without saying why it's doing nothing.");
+			_warnForLocalAndGlobal = _settingsCategory.CreateEntry("WarnForLocalAndGlobal", false, "Verbose Verification", $"If true, and if {_verifyParameterNames.DisplayName} is true, the system will also raise a notice in the console when it finds both \"Param\" *and* \"#Param\" on an avatar (avatar authors doing this is anticipated to be intentional, but if accidental it can be confusing).");
 			_settingsCategory.SaveToFile();
 		}
 
@@ -51,7 +56,7 @@ namespace CVRLocalTools {
 			if (name.StartsWith("#")) throw new ArgumentException($"The name input into {nameof(AssertParameterIsLocal)} starts with #. It should not start with #.", nameof(name));
 
 			string localName = "#" + name;
-			if (!WarnForFaults) {
+			if (!VerifyParameterNames) {
 				return true;
 			}
 
@@ -85,9 +90,7 @@ namespace CVRLocalTools {
 		internal static bool AssertParametersAreLocal(Animator animator, string[] names) {
 			if (animator == null) throw new ArgumentNullException(nameof(animator));
 			if (names == null) throw new ArgumentNullException(nameof(names));
-			if (!WarnForFaults) {
-				return true;
-			}
+			if (!VerifyParameterNames) return true;
 
 			bool ok = true;
 			IReadOnlyDictionary<string, AnimatorControllerParameter> nameLookup = animator.GetParameters();
