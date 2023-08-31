@@ -31,13 +31,20 @@ namespace CVRLocalTools {
 		/// </summary>
 		internal static bool WarnForLocalAndGlobal => _warnForLocalAndGlobal.Value;
 
+		/// <summary>
+		/// If true, the system will manage parameters from this mod even if they are not #local.
+		/// </summary>
+		internal static bool DriveRemoteParameters => _driveRemoteParameters.Value;
+
 		private static MelonPreferences_Entry<bool> _verifyLocality;
 		private static MelonPreferences_Entry<bool> _warnForLocalAndGlobal;
+		private static MelonPreferences_Entry<bool> _driveRemoteParameters;
 
 		internal static void InitializePrefs() {
 			_settingsCategory = MelonPreferences.CreateCategory("Local Parameter Extender");
 			_verifyLocality = _settingsCategory.CreateEntry("WarnForNetworkedLocal", false, "Verify Locality", "If true, raise a warning in the console if the avatar declares any parameter managed by this mod without a leading #. If disabled, the mod will just do nothing without saying why it's doing nothing.");
 			_warnForLocalAndGlobal = _settingsCategory.CreateEntry("WarnForLocalAndGlobal", false, "Warn For Duplicate Local/Networked Parameters", $"If true, and if {_verifyLocality.DisplayName} is true, the system will also raise a notice in the console when it finds both \"Param\" *and* \"#Param\" on an avatar (avatar authors doing this is anticipated to be intentional, but if accidental it can be confusing).");
+			_driveRemoteParameters = _settingsCategory.CreateEntry("DriveRemoteParameters", false, "Smooth Others' Parameters", "If true, this mod's parameters that belong to other players (i.e. someone else's VelocityY parameter) will be managed by your client, granted they are not #local. This can be used to enforce a \"what you see\" behavior; the value you get in their animator is reflective of what you see their avatar doing, rather than what they say their avatar is doing over the network. This can reduce latency but will also create a difference between in what you both see.");
 			_settingsCategory.SaveToFile();
 		}
 

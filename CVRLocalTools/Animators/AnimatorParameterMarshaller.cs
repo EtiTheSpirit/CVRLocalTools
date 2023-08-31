@@ -22,6 +22,7 @@ namespace CVRLocalTools.Animators {
 		private bool _desiredLocality = false;
 		private Camera _mainCamera = null;
 		private float _lastCheckedCameraSince = float.PositiveInfinity;
+		private bool _hasWarnedForMissingInputMgr = false;
 
 		// This stuff would be way better with #nullable
 		// All MutableAnimatorParameters are nullable.
@@ -133,41 +134,44 @@ namespace CVRLocalTools.Animators {
 				LocalUtilsMain._log.Msg("Checking for Local Parameter Extender parameters...");
 				LocalUtilsMain._log.WriteLine();
 			}
-			_isLocal = GetParameter(animator, "IsLocal", ref errors);
+			_isLocal = GetParameter(animator, "IsLocal", ref errors, false, false);
 
-			_velocityX = GetParameter(animator, "VelocityX", ref errors);
-			_velocityY = GetParameter(animator, "VelocityY", ref errors);
-			_velocityZ = GetParameter(animator, "VelocityZ", ref errors);
+			bool canDriveParameterNow = _desiredLocality || PrefsAndTools.DriveRemoteParameters;
 
-			_localVelocityX = GetParameter(animator, "RelativeVelocityX", ref errors);
-			_localVelocityY = GetParameter(animator, "RelativeVelocityY", ref errors);
-			_localVelocityZ = GetParameter(animator, "RelativeVelocityZ", ref errors);
+			_velocityX = GetParameter(animator, "VelocityX", ref errors, canDriveParameterNow);
+			_velocityY = GetParameter(animator, "VelocityY", ref errors, canDriveParameterNow);
+			_velocityZ = GetParameter(animator, "VelocityZ", ref errors, canDriveParameterNow);
 
-			_rotVelocityX = GetParameter(animator, "RotVelocityX", ref errors);
-			_rotVelocityY = GetParameter(animator, "RotVelocityY", ref errors);
-			_rotVelocityZ = GetParameter(animator, "RotVelocityZ", ref errors);
+			_localVelocityX = GetParameter(animator, "RelativeVelocityX", ref errors, canDriveParameterNow);
+			_localVelocityY = GetParameter(animator, "RelativeVelocityY", ref errors, canDriveParameterNow);
+			_localVelocityZ = GetParameter(animator, "RelativeVelocityZ", ref errors, canDriveParameterNow);
 
-			_positionX = GetParameter(animator, "PositionX", ref errors);
-			_positionY = GetParameter(animator, "PositionY", ref errors);
-			_positionZ = GetParameter(animator, "PositionZ", ref errors);
+			_rotVelocityX = GetParameter(animator, "RotVelocityX", ref errors, canDriveParameterNow);
+			_rotVelocityY = GetParameter(animator, "RotVelocityY", ref errors, canDriveParameterNow);
+			_rotVelocityZ = GetParameter(animator, "RotVelocityZ", ref errors, canDriveParameterNow);
 
-			_rotationX = GetParameter(animator, "RotationX", ref errors);
-			_rotationY = GetParameter(animator, "RotationY", ref errors);
-			_rotationZ = GetParameter(animator, "RotationZ", ref errors);
+			_positionX = GetParameter(animator, "PositionX", ref errors, canDriveParameterNow);
+			_positionY = GetParameter(animator, "PositionY", ref errors, canDriveParameterNow);
+			_positionZ = GetParameter(animator, "PositionZ", ref errors, canDriveParameterNow);
 
-			_localRotationX = GetParameter(animator, "RelativePitch", ref errors);
-			_localRotationZ = GetParameter(animator, "RelativeRoll", ref errors);
+			_rotationX = GetParameter(animator, "RotationX", ref errors, canDriveParameterNow);
+			_rotationY = GetParameter(animator, "RotationY", ref errors, canDriveParameterNow);
+			_rotationZ = GetParameter(animator, "RotationZ", ref errors, canDriveParameterNow);
 
-			_upright = GetParameter(animator, "Upright", ref errors);
+			_localRotationX = GetParameter(animator, "RelativePitch", ref errors, canDriveParameterNow);
+			_localRotationZ = GetParameter(animator, "RelativeRoll", ref errors, canDriveParameterNow);
 
-			_lookX = GetParameter(animator, "LookX", ref errors, true);
-			_lookY = GetParameter(animator, "LookY", ref errors, true);
-			_lookZ = GetParameter(animator, "LookZ", ref errors, true);
+			_upright = GetParameter(animator, "Upright", ref errors, canDriveParameterNow);
 
-			_fingerTrackingEnabled = GetParameter(animator, "FingerTracking", ref errors, true);
+			// Local-Only Parameters:
+			_lookX = GetParameter(animator, "LookX", ref errors, _desiredLocality);
+			_lookY = GetParameter(animator, "LookY", ref errors, _desiredLocality);
+			_lookZ = GetParameter(animator, "LookZ", ref errors, _desiredLocality);
+			_fingerTrackingEnabled = GetParameter(animator, "FingerTracking", ref errors, _desiredLocality);
+			// Above: Use _desiredLocality instead of canDriveParameterNow. The remote player should never control the value.
 
 			if (ViewManager.Instance != null && errors != UserFacingErrorFlags.NoError && _desiredLocality) {
-				LocalUtilsMain._log.Error("CVRLocalTools_MalformedParametersOnLocal :: There were issues with your avatar. This log entry will be picked up by the Mod Log Scanner.");
+				LocalUtilsMain._log.Error("CVRLocalToolsMod_MalformedParametersOnLocal :: There were issues with your avatar. This log entry will be picked up by the Mod Log Scanner.");
 				ViewManager.Instance.TriggerPushNotification("Local Parameter Extender: Detected that your animator might have incorrect parameters. Check the log for more info.", 8f);
 			}
 
@@ -239,7 +243,17 @@ namespace CVRLocalTools.Animators {
 				}
 
 				if (CVRInputManager.Instance != null) {
+					if (_hasWarnedForMissingInputMgr) {
+						LocalUtilsMain._log.Warning($"The input manager has been found after it was missing before. {_fingerTrackingEnabled.Name} will be updated properly.");
+						_hasWarnedForMissingInputMgr = false;
+					}
 					SetIfPresent(_fingerTrackingEnabled, CVRInputManager.Instance.individualFingerTracking);
+				} else {
+					if (!_hasWarnedForMissingInputMgr) {
+						LocalUtilsMain._log.Warning($"The input manager is missing! {_fingerTrackingEnabled.Name} will be set to false until it is present.");
+						_hasWarnedForMissingInputMgr = true;
+					}
+					SetIfPresent(_fingerTrackingEnabled, false);
 				}
 			}
 #endregion

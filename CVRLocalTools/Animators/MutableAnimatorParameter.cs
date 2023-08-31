@@ -26,7 +26,6 @@ namespace CVRLocalTools.Animators {
 		/// <summary>
 		/// The name of the parameter
 		/// </summary>
-		[Obsolete("The ID should be preferred over the name.")]
 		public string Name { get; }
 
 		/// <summary>
@@ -39,14 +38,12 @@ namespace CVRLocalTools.Animators {
 		/// </summary>
 		public bool IsLocalParameter { get; }
 
-#pragma warning disable CS0618 // Obsolescence
 		public MutableAnimatorParameter(Animator animator, string name, int id) {
 			Animator = animator;
 			Name = name;
 			ID = id;
 			IsLocalParameter = name.StartsWith("#");
 		}
-#pragma warning restore CS0618
 
 		/// <summary>
 		/// Attempts to get the ID of a named animator parameter.
