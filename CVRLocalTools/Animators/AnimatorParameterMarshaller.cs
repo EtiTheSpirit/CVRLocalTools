@@ -167,11 +167,12 @@ namespace CVRLocalTools.Animators {
 			_upright = GetParameter(animator, "Upright", ref errors, canDriveParameterNow);
 
 			// Local-Only Parameters:
-			_lookX = GetParameter(animator, "LookX", ref errors, _desiredLocality);
-			_lookY = GetParameter(animator, "LookY", ref errors, _desiredLocality);
-			_lookZ = GetParameter(animator, "LookZ", ref errors, _desiredLocality);
-			_fingerTrackingEnabled = GetParameter(animator, "FingerTracking", ref errors, _desiredLocality);
-			// Above: Use _desiredLocality instead of canDriveParameterNow. The remote player should never control the value.
+			if (_desiredLocality) {
+				_lookX = GetParameter(animator, "LookX", ref errors, true, false);
+				_lookY = GetParameter(animator, "LookY", ref errors, true, false);
+				_lookZ = GetParameter(animator, "LookZ", ref errors, true, false);
+				_fingerTrackingEnabled = GetParameter(animator, "FingerTracking", ref errors, true, false);
+			}
 
 			if (ViewManager.Instance != null && errors != UserFacingErrorFlags.NoError && _desiredLocality) {
 				LocalUtilsMain._log.Error("CVRLocalToolsMod_MalformedParametersOnLocal :: There were issues with your avatar. This log entry will be picked up by the Mod Log Scanner.");
@@ -216,6 +217,9 @@ namespace CVRLocalTools.Animators {
 			bool canDriveParameterNow = _desiredLocality || PrefsAndTools.DriveRemoteParameters;
 #region Replicated Values
 			if (canDriveParameterNow) {
+				// Now, check this value.
+				// Only if it's my avatar, or if the setting to drive other peoples' avatars is enabled, should these change.
+
 				// World values:
 				SetVector3(_positionX, _positionY, _positionZ, position);
 				SetVector3(_rotationX, _rotationY, _rotationZ, rotation);
@@ -228,6 +232,20 @@ namespace CVRLocalTools.Animators {
 				SetVector3(_localVelocityX, _localVelocityY, _localVelocityZ, localVelocity);
 				SetIfPresent(_localRotationX, Pitch(myTransform));
 				SetIfPresent(_localRotationZ, Roll(myTransform));
+			} else if (!_desiredLocality && !PrefsAndTools.DriveRemoteParameters) {
+				// If it's not my avatar and the replication setting is false, it should all be reset.
+				
+				// World values:
+				SetVector3(_positionX, _positionY, _positionZ, Vector3.zero);
+				SetVector3(_rotationX, _rotationY, _rotationZ, Vector3.zero);
+				SetVector3(_velocityX, _velocityY, _velocityZ, Vector3.zero);
+				SetVector3(_rotVelocityX, _rotVelocityY, _rotVelocityZ, Vector3.zero);
+				SetIfPresent(_upright, 1.0f);
+
+				// Relative values:
+				SetVector3(_localVelocityX, _localVelocityY, _localVelocityZ, Vector3.zero);
+				SetIfPresent(_localRotationX, 0.0f);
+				SetIfPresent(_localRotationZ, 0.0f);
 			}
 #endregion
 
