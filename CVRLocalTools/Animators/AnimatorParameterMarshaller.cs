@@ -1,5 +1,7 @@
 ﻿using ABI_RC.Core.InteractionSystem;
 using ABI_RC.Core.Player;
+using ABI_RC.Core.Savior;
+using ABI_RC.Systems.InputManagement;
 using ABI_RC.Systems.MovementSystem;
 using RTG;
 using System;
@@ -11,7 +13,6 @@ using System.Runtime.InteropServices.WindowsRuntime;
 using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
-using static MelonLoader.MelonLogger;
 
 namespace CVRLocalTools.Animators {
 
@@ -55,77 +56,127 @@ namespace CVRLocalTools.Animators {
 		private MutableAnimatorParameter _lookY;
 		private MutableAnimatorParameter _lookZ;
 
-		/*
-		private MutableAnimatorParameter _localLookX;
-		private MutableAnimatorParameter _localLookY;
-		private MutableAnimatorParameter _localLookZ;
-		*/
+		private MutableAnimatorParameter _fingerTrackingEnabled;
 
 		private Vector3 _lastPosition;
 		private Vector3 _lastRotation;
-		private readonly List<string> _names = new List<string>();
 
-		private MutableAnimatorParameter GetParameter(Animator animator, string name) {
-			bool isPresent = MutableAnimatorParameter.TryGetIDFromName(animator, "#" + name, out int id);
-			if (isPresent) {
-				_names.Add(name);
-				return new MutableAnimatorParameter(animator, "#" + name, id);
+		/// <summary>
+		/// Creates a new <see cref="MutableAnimatorParameter"/> with the provided name, granted the provided <paramref name="animator"/> has such a parameter. Returns <see langword="null"/> if no such parameter exists.
+		/// </summary>
+		/// <param name="animator">The animator that contains this parameter.</param>
+		/// <param name="name">The name of the parameter. This must not begin with '#'.</param>
+		/// <param name="allowReplicated">If true, the replicated parameter is searched for first (with no leading '#'). Iff that is not found, its local counterpart <c>#<paramref name="name"/></c> is searched for.</param>
+		/// <param name="disallowLocal">If true, the fallback search (see info on the <paramref name="allowReplicated"/> parameter) is skipped.</param>
+		/// <returns></returns>
+		/// <exception cref="ArgumentException">If the name starts with a hashtag, or if an impossible search scenario (replicated disallowed while local is also disallowed) is encountered.</exception>
+		private MutableAnimatorParameter GetParameter(Animator animator, string name, ref UserFacingErrorFlags errors, bool allowReplicated = false, bool disallowLocal = false) {
+			if (name.StartsWith("#")) {
+				throw new ArgumentException("The name must not begin with '#' in code.", nameof(name));
 			}
+			if (!allowReplicated && disallowLocal) {
+				throw new ArgumentException("Attempt to disallow both a replicated and a local parameter with this name.", $"{nameof(allowReplicated)}, {nameof(disallowLocal)}");
+			}
+
+			string localName = '#' + name;
+			bool hasReplicatedParam = MutableAnimatorParameter.TryGetIDFromName(animator, name, out int replicatedParamID);
+			bool hasLocalParam = MutableAnimatorParameter.TryGetIDFromName(animator, localName, out int localParamID);
+
+			if (allowReplicated) {
+				// A parameter named "name" is allowed...
+				if (hasReplicatedParam) {
+					// ... And exists, return it.
+					// (But first, check this)
+					if (hasLocalParam) {
+						if (PrefsAndTools.WarnForLocalAndGlobal) {
+							errors |= UserFacingErrorFlags.BothReplicatedAndLocal;
+							PrefsAndTools.WarnForLocalAndReplicatedParameter(name);
+						}
+					}
+					return new MutableAnimatorParameter(animator, name, replicatedParamID);
+				} else if (!disallowLocal && hasLocalParam) {
+					// ... But does not exist, though "#name" is also allowed and exists. Return that instead.
+					return new MutableAnimatorParameter(animator, localName, localParamID);
+				} else {
+					// ... But either no local counterpart "#name" is allowed, or it was but was not found. Return nothing.
+					return null;
+				}
+			} else {
+				// A parameter named "name" is NOT allowed, only "#name"...
+				if (hasReplicatedParam) {
+					if (hasLocalParam) {
+						if (PrefsAndTools.WarnForLocalAndGlobal) {
+							errors |= UserFacingErrorFlags.BothReplicatedAndLocal;
+							PrefsAndTools.WarnForLocalAndReplicatedParameter(name);
+						}
+					} else {
+						if (PrefsAndTools.VerifyProperLocality) {
+							errors |= UserFacingErrorFlags.ReplicatedInPlaceOfLocal;
+							PrefsAndTools.WarnForReplicatedInPlaceOfLocal(name);
+						}
+					}
+				}
+				if (hasLocalParam) {
+					return new MutableAnimatorParameter(animator, localName, localParamID);
+				}
+			}
+			
 			return null;
 		}
 
 		private void LateInitWithAnimator(Animator animator) {
 			if (animator == null) throw new ArgumentNullException(nameof(animator));
-			_isLocal = GetParameter(animator, "IsLocal");
 
-			_velocityX = GetParameter(animator, "VelocityX");
-			_velocityY = GetParameter(animator, "VelocityY");
-			_velocityZ = GetParameter(animator, "VelocityZ");
+			UserFacingErrorFlags errors = UserFacingErrorFlags.NoError;
 
-			_localVelocityX = GetParameter(animator, "RelativeVelocityX");
-			_localVelocityY = GetParameter(animator, "RelativeVelocityY");
-			_localVelocityZ = GetParameter(animator, "RelativeVelocityZ");
-
-			_rotVelocityX = GetParameter(animator, "RotVelocityX");
-			_rotVelocityY = GetParameter(animator, "RotVelocityY");
-			_rotVelocityZ = GetParameter(animator, "RotVelocityZ");
-
-			_positionX = GetParameter(animator, "PositionX");
-			_positionY = GetParameter(animator, "PositionY");
-			_positionZ = GetParameter(animator, "PositionZ");
-
-			_rotationX = GetParameter(animator, "RotationX");
-			_rotationY = GetParameter(animator, "RotationY");
-			_rotationZ = GetParameter(animator, "RotationZ");
-
-			_localRotationX = GetParameter(animator, "RelativePitch");
-			_localRotationZ = GetParameter(animator, "RelativeRoll");
-
-			_upright = GetParameter(animator, "Upright");
-
-			_lookX = GetParameter(animator, "LookX");
-			_lookY = GetParameter(animator, "LookY");
-			_lookZ = GetParameter(animator, "LookZ");
-
-			/*
-			// TODO: This would benefit most from a hip tracker.
-			_localLookX = GetParameter(animator, "RelativeLookX");
-			_localLookY = GetParameter(animator, "RelativeLookY");
-			_localLookZ = GetParameter(animator, "RelativeLookZ");
-			*/
-
-			// Now the warning:
-			string[] names = _names.ToArray();
-			bool ok = PrefsAndTools.AssertParametersAreLocal(animator, names);
-
-#pragma warning disable IDE0031
-			if (ViewManager.Instance != null && !ok) {
-				ViewManager.Instance.TriggerPushNotification("CVRLocalTools found what might be a mistake with this avatar's parameters (check the log file). You can turn this warning off in your ML preferences.", 8f);
+			if (_desiredLocality) {
+				LocalUtilsMain._log.Msg("Checking for Local Parameter Extender parameters...");
+				LocalUtilsMain._log.WriteLine();
 			}
-#pragma warning restore IDE0031
+			_isLocal = GetParameter(animator, "IsLocal", ref errors);
+
+			_velocityX = GetParameter(animator, "VelocityX", ref errors);
+			_velocityY = GetParameter(animator, "VelocityY", ref errors);
+			_velocityZ = GetParameter(animator, "VelocityZ", ref errors);
+
+			_localVelocityX = GetParameter(animator, "RelativeVelocityX", ref errors);
+			_localVelocityY = GetParameter(animator, "RelativeVelocityY", ref errors);
+			_localVelocityZ = GetParameter(animator, "RelativeVelocityZ", ref errors);
+
+			_rotVelocityX = GetParameter(animator, "RotVelocityX", ref errors);
+			_rotVelocityY = GetParameter(animator, "RotVelocityY", ref errors);
+			_rotVelocityZ = GetParameter(animator, "RotVelocityZ", ref errors);
+
+			_positionX = GetParameter(animator, "PositionX", ref errors);
+			_positionY = GetParameter(animator, "PositionY", ref errors);
+			_positionZ = GetParameter(animator, "PositionZ", ref errors);
+
+			_rotationX = GetParameter(animator, "RotationX", ref errors);
+			_rotationY = GetParameter(animator, "RotationY", ref errors);
+			_rotationZ = GetParameter(animator, "RotationZ", ref errors);
+
+			_localRotationX = GetParameter(animator, "RelativePitch", ref errors);
+			_localRotationZ = GetParameter(animator, "RelativeRoll", ref errors);
+
+			_upright = GetParameter(animator, "Upright", ref errors);
+
+			_lookX = GetParameter(animator, "LookX", ref errors, true);
+			_lookY = GetParameter(animator, "LookY", ref errors, true);
+			_lookZ = GetParameter(animator, "LookZ", ref errors, true);
+
+			_fingerTrackingEnabled = GetParameter(animator, "FingerTracking", ref errors, true);
+
+			if (ViewManager.Instance != null && errors != UserFacingErrorFlags.NoError && _desiredLocality) {
+				LocalUtilsMain._log.Error("CVRLocalTools_MalformedParametersOnLocal :: There were issues with your avatar. This log entry will be picked up by the Mod Log Scanner.");
+				ViewManager.Instance.TriggerPushNotification("Local Parameter Extender: Detected that your animator might have incorrect parameters. Check the log for more info.", 8f);
+			}
 
 			SetIfPresent(_isLocal, _desiredLocality);
-			LocalUtilsMain._log.Msg("Parameter updater ready for this avatar.");
+
+			if (_desiredLocality) {
+				LocalUtilsMain._log.WriteLine();
+				LocalUtilsMain._log.Msg("Parameter updater ready for this avatar.");
+			}
 
 			_lastPosition = gameObject.transform.position;
 			_lastRotation = gameObject.transform.eulerAngles;
@@ -153,8 +204,9 @@ namespace CVRLocalTools.Animators {
 			Vector3 velocity = (position - _lastPosition) * invFdt;
 			Vector3 rotationalVelocity = (rotation - _lastRotation) * invFdt;
 			WrapVector3Angles(ref rotationalVelocity); // TODO: This creates a large, backwards delta when wrapping angles i.e. 359 => 1
-			// TODO: Why does the rigidbody not have its values set?
+													   // TODO: Why does the rigidbody not have its values set?
 
+#region Replicated Values
 			// World values:
 			SetVector3(_positionX, _positionY, _positionZ, position);
 			SetVector3(_rotationX, _rotationY, _rotationZ, rotation);
@@ -167,8 +219,9 @@ namespace CVRLocalTools.Animators {
 			SetVector3(_localVelocityX, _localVelocityY, _localVelocityZ, localVelocity);
 			SetIfPresent(_localRotationX, Pitch(myTransform));
 			SetIfPresent(_localRotationZ, Roll(myTransform));
-			
+#endregion
 
+#region Client-Only Values
 			// Client-only values: 
 			if (_desiredLocality) {
 				// Camera getter:
@@ -184,22 +237,25 @@ namespace CVRLocalTools.Animators {
 					Transform trs = _mainCamera.gameObject.transform;
 					SetVector3(_lookX, _lookY, _lookZ, trs.forward);
 				}
+
+				if (CVRInputManager.Instance != null) {
+					SetIfPresent(_fingerTrackingEnabled, CVRInputManager.Instance.individualFingerTracking);
+				}
 			}
+#endregion
 
 			_lastPosition = position;
 			_lastRotation = rotation;
 		}
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private void SetIfPresent(MutableAnimatorParameter param, float value) {
-			if (param?.IsValid ?? false) {
+			if (param.IsValid()) {
 				param.Set(value);
 			}
 		}
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private void SetIfPresent(MutableAnimatorParameter param, bool value) {
-			if (param?.IsValid ?? false) {
+			if (param.IsValid()) {
 				param.Set(value);
 			}
 		}
@@ -233,17 +289,24 @@ namespace CVRLocalTools.Animators {
 		// Pitch and Roll methods acquired via https://answers.unity.com/questions/1366142/get-pitch-and-roll-values-from-object.html
 
 		private float Pitch(Transform trs) {
-			Vector3 right = trs.right * Mathf.Sign(transform.up.y);
+			Vector3 right = trs.right * Mathf.Sign(trs.up.y);
 			right.y = 0;
 			Vector3 fwd = Vector3.Cross(right, Vector3.up).normalized;
-			return Vector3.Angle(fwd, transform.forward) * Mathf.Sign(transform.forward.y);
+			return Vector3.Angle(fwd, trs.forward) * Mathf.Sign(trs.forward.y);
 		}
 
 		private float Roll(Transform trs) {
-			Vector3 fwd = transform.forward * Mathf.Sign(transform.up.y);
+			Vector3 fwd = trs.forward * Mathf.Sign(trs.up.y);
 			fwd.y = 0;
 			Vector3 right = Vector3.Cross(Vector3.up, fwd).normalized;
-			return Vector3.Angle(right, transform.right) * Mathf.Sign(transform.right.y);
+			return Vector3.Angle(right, trs.right) * Mathf.Sign(trs.right.y);
+		}
+
+		[Flags]
+		private enum UserFacingErrorFlags {
+			NoError,
+			ReplicatedInPlaceOfLocal,
+			BothReplicatedAndLocal
 		}
 	}
 }
