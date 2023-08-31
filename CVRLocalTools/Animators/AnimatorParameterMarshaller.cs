@@ -136,7 +136,10 @@ namespace CVRLocalTools.Animators {
 			}
 			_isLocal = GetParameter(animator, "IsLocal", ref errors, false, false);
 
-			bool canDriveParameterNow = _desiredLocality || PrefsAndTools.DriveRemoteParameters;
+			//bool canDriveParameterNow = _desiredLocality || PrefsAndTools.DriveRemoteParameters;
+			const bool canDriveParameterNow = true; // Don't check this here.
+			// I still want to instantiate the parameter so that the config option can be changed
+			// *without* requiring the remote player to reload their avatar.
 
 			_velocityX = GetParameter(animator, "VelocityX", ref errors, canDriveParameterNow);
 			_velocityY = GetParameter(animator, "VelocityY", ref errors, canDriveParameterNow);
@@ -210,19 +213,22 @@ namespace CVRLocalTools.Animators {
 			WrapVector3Angles(ref rotationalVelocity); // TODO: This creates a large, backwards delta when wrapping angles i.e. 359 => 1
 													   // TODO: Why does the rigidbody not have its values set?
 
+			bool canDriveParameterNow = _desiredLocality || PrefsAndTools.DriveRemoteParameters;
 #region Replicated Values
-			// World values:
-			SetVector3(_positionX, _positionY, _positionZ, position);
-			SetVector3(_rotationX, _rotationY, _rotationZ, rotation);
-			SetVector3(_velocityX, _velocityY, _velocityZ, velocity);
-			SetVector3(_rotVelocityX, _rotVelocityY, _rotVelocityZ, rotationalVelocity);
-			SetIfPresent(_upright, myTransform.up.Dot(Vector3.up));
+			if (canDriveParameterNow) {
+				// World values:
+				SetVector3(_positionX, _positionY, _positionZ, position);
+				SetVector3(_rotationX, _rotationY, _rotationZ, rotation);
+				SetVector3(_velocityX, _velocityY, _velocityZ, velocity);
+				SetVector3(_rotVelocityX, _rotVelocityY, _rotVelocityZ, rotationalVelocity);
+				SetIfPresent(_upright, myTransform.up.Dot(Vector3.up));
 
-			// Relative values:
-			Vector3 localVelocity = myTransform.TransformVector(velocity);
-			SetVector3(_localVelocityX, _localVelocityY, _localVelocityZ, localVelocity);
-			SetIfPresent(_localRotationX, Pitch(myTransform));
-			SetIfPresent(_localRotationZ, Roll(myTransform));
+				// Relative values:
+				Vector3 localVelocity = myTransform.TransformVector(velocity);
+				SetVector3(_localVelocityX, _localVelocityY, _localVelocityZ, localVelocity);
+				SetIfPresent(_localRotationX, Pitch(myTransform));
+				SetIfPresent(_localRotationZ, Roll(myTransform));
+			}
 #endregion
 
 #region Client-Only Values
